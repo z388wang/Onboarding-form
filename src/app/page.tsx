@@ -1,103 +1,186 @@
-import Image from "next/image";
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import Button from "../atom/button";
+import FormInput from "../atom/formInput";
+import { formatPhoneNumberWithInputMask, validatePhone } from "@/lib/phone";
+import { ArrowRightIcon } from "@heroicons/react/24/outline";
+// import { useDebounce } from "@/lib/useDebounce";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [formData, setFormData] = useState<
+    Record<string, { value: string; error: string }>
+  >({
+    firstName: { value: "", error: "" },
+    lastName: { value: "", error: "" },
+    phoneNumber: { value: "", error: "" },
+    corporationNumber: { value: "", error: "" },
+  });
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const requiredFields = [
+    { key: "firstName", label: "First name" },
+    { key: "lastName", label: "Last name" },
+    { key: "phoneNumber", label: "Phone number" },
+    { key: "corporationNumber", label: "Corporation number" },
+  ];
+
+  const updateField = useCallback((key: string, value: string, error = "") => {
+    setFormData((prev) => ({
+      ...prev,
+      [key]: { value, error },
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (formData.phoneNumber.value === "") {
+      updateField("phoneNumber", "", "");
+    }
+  }, [formData.phoneNumber.value, updateField]);
+
+  // const debouncedCorpNumber = useDebounce(
+  //   formData.corporationNumber.value,
+  //   500
+  // );
+
+  // useEffect(() => {
+  //   if (!debouncedCorpNumber) return;
+
+  //   const runValidation = async () => {
+  //     await validateCorpNumber(debouncedCorpNumber);
+  //   };
+
+  //   runValidation();
+  // }, [debouncedCorpNumber]);
+
+  const validateCorpNumber = async () => {
+    try {
+      const response = await fetch(
+        `https://fe-hometask-api.qa.vault.tryvault.com/corporation-number/${formData.corporationNumber.value}`
+      );
+      const data = await response.json();
+
+      if (!data.valid) {
+        updateField(
+          "corporationNumber",
+          formData.corporationNumber.value,
+          "Invalid corporation number"
+        );
+      } else {
+        updateField("corporationNumber", formData.corporationNumber.value, "");
+      }
+    } catch (error) {
+      console.error("Error validating corporation number:", error);
+      updateField(
+        "corporationNumber",
+        formData.corporationNumber.value,
+        "Failed to validate corporation number"
+      );
+    }
+  };
+
+  const handleSubmit = async () => {
+    let hasError = false;
+    requiredFields.forEach((field) => {
+      if (formData[field.key].error) {
+        return;
+      } else if (!formData[field.key].value) {
+        hasError = true;
+        updateField(
+          field.key,
+          formData[field.key].value,
+          formData[field.key].error || `${field.label} is required`
+        );
+      }
+    });
+
+    if (hasError) return;
+
+    try {
+      const response = await fetch(
+        "https://fe-hometask-api.qa.vault.tryvault.com/profile-details",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: formData.firstName.value,
+            lastName: formData.lastName.value,
+            corporationNumber: formData.corporationNumber.value,
+            phone: formData.phoneNumber.value,
+          }),
+        }
+      );
+      if (response.ok) {
+        alert("Onboarding successful");
+      } else {
+        const data = await response.json();
+        alert(data.message);
+      }
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      alert("Failed to submit");
+    }
+  };
+
+  return (
+    <div className="bg-neutral-200 w-screen h-screen flex items-center justify-center">
+      <div className="flex flex-col gap-l bg-white border-[1px] border-neutral-300 rounded-medium items-center text-neutral-800 p-2xl">
+        <div className="text-h2Regular">Onboarding Form</div>
+        <div className="flex gap-xl items-center justify-center">
+          <FormInput
+            data-testid="firstName"
+            label="First name"
+            value={formData.firstName.value}
+            onChange={(val) => updateField("firstName", val)}
+            errorMessage={formData.firstName.error}
+            maxLength={50}
+          />
+          <FormInput
+            data-testid="lastName"
+            label="Last name"
+            value={formData.lastName.value}
+            onChange={(val) => updateField("lastName", val)}
+            errorMessage={formData.lastName.error}
+            maxLength={50}
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+        <FormInput
+          data-testid="phoneNumber"
+          label="Phone number"
+          value={formData.phoneNumber.value}
+          onChange={(val) => {
+            const error = !validatePhone(val) ? "Invalid phone number" : "";
+            updateField(
+              "phoneNumber",
+              formatPhoneNumberWithInputMask(val),
+              error
+            );
+          }}
+          errorMessage={formData.phoneNumber.error}
+          maxLength={12}
+        />
+        <FormInput
+          data-testid="corporationNumber"
+          label="Corporation number"
+          value={formData.corporationNumber.value}
+          onChange={(val) => {
+            updateField("corporationNumber", val);
+          }}
+          errorMessage={formData.corporationNumber.error}
+          onBlur={validateCorpNumber}
+          maxLength={9}
+        />
+        <Button
+          data-testid="submit"
+          onClick={handleSubmit}
+          icon={{
+            icon: <ArrowRightIcon className="size-l text-neutral-0" />,
+            position: "right",
+          }}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          Submit
+        </Button>
+      </div>
     </div>
   );
 }
